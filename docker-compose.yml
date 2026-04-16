@@ -1,0 +1,54 @@
+services:
+  mysql:
+    image: mysql:5.7
+    container_name: bcc-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: labpass
+      MYSQL_DATABASE: lab
+      MYSQL_USER: labuser
+      MYSQL_PASSWORD: labpass
+    volumes:
+      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - mysql-data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-plabpass"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  workload:
+    build: ./workload
+    container_name: bcc-workload
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: lab
+      MYSQL_USER: labuser
+      MYSQL_PASSWORD: labpass
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+
+  bcc:
+    build: ./bcc
+    container_name: bcc-tools
+    privileged: true
+    pid: "service:mysql"
+    stdin_open: true
+    tty: true
+    volumes:
+      - /sys/kernel/debug:/sys/kernel/debug
+      - /lib/modules:/lib/modules:ro
+      - /usr/src:/usr/src:ro
+      - ./bcc/scripts:/scripts:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command: ["sleep", "infinity"]
+
+volumes:
+  mysql-data:
