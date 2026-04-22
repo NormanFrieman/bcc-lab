@@ -1,18 +1,40 @@
 # BCC Lab — Rastreamento de Queries MySQL
 
-Laboratório Docker para explorar as ferramentas BCC (BPF Compiler Collection)
-voltadas à observabilidade de banco de dados MySQL.
+Laboratório Docker para explorar ferramentas BPF (Berkeley Packet Filter) voltadas à observabilidade de banco de dados MySQL 5.7.
 
-## Ferramentas cobertas
+> ⚠️ **Nota importante**: As ferramentas BCC oficiais (`mysqld_qslower-bpfcc`, `dbslower-bpfcc`, `dbstat-bpfcc`) **não funcionam** com a imagem Docker `mysql:5.7` devido a incompatibilidades nos probes USDT. Este projeto inclui versões corrigidas que utilizam `query__exec__start`/`query__exec__done` em vez de `query__start`/`query__done`.
 
-| Ferramenta | O que faz |
-|---|---|
-| `mysqld_query` | Rastreia **todas** as queries MySQL em tempo real via USDT probes |
-| `dbslower` | Filtra queries acima de um **limiar de latência** configurável |
-| `dbstat` | Exibe **histograma** de distribuição de latências em intervalos |
+---
 
-> As três ferramentas usam probes USDT (`query__start` / `query__done`)
-> presentes apenas no **MySQL 5.7**. O MySQL 8.0+ removeu esse suporte.
+## Status Atual
+
+✅ **Todas as ferramentas de tracing estão funcionando:**
+
+| Comando | Descrição | Status |
+|---------|-----------|--------|
+| `make trace-query` | Rastreia todas as queries em tempo real | ✅ Funcionando |
+| `make trace-slow` | Rastreia queries > 1ms | ✅ Funcionando |
+| `make trace-slow-10ms` | Rastreia queries > 10ms | ✅ Funcionando |
+| `make trace-stat` | Histograma de latências (5s) | ✅ Funcionando |
+| `make trace-stat-10s` | Histograma de latências (10s) | ✅ Funcionando |
+
+**Versão corrigida:** d6d6d66 - `fix: Corrige ferramentas BPF de rastreamento MySQL para usar probes USDT corretos`
+
+---
+
+## Ferramentas Implementadas
+
+| Ferramenta | O que faz | Base |
+|------------|-----------|------|
+| `mysqld_query_fixed` | Rastreia **todas** as queries MySQL em tempo real | Original: `mysqld_qslower` (Brendan Gregg/Netflix, 2016) |
+| `dbslower_fixed` | Filtra queries acima de um **limiar de latência** | Original: `dbslower` (Sasha Goldshtein, 2017) |
+| `dbstat_fixed` | Exibe **histograma** de distribuição de latências | Original: `dbstat` (Sasha Goldshtein, 2017) |
+
+As ferramentas utilizam probes USDT (`query__exec__start` / `query__exec__done`) que funcionam corretamente com o MySQL 5.7 da imagem Docker oficial.
+
+> **Documentação comparativa**: Veja [docs/comparacao-mysqld-qslower.md](docs/comparacao-mysqld-qslower.md), [docs/comparacao-dbslower.md](docs/comparacao-dbslower.md) e [docs/comparacao-dbstat.md](docs/comparacao-dbstat.md) para comparação detalhada entre as implementações originais do BCC e nossas versões corrigidas.
+
+---
 
 ## Pré-requisitos
 
@@ -25,24 +47,38 @@ Verifique:
 ls /sys/kernel/debug/tracing
 ```
 
+---
+
 ## Estrutura
 
 ```
 bcc-lab/
-├── docker-compose.yml      # orquestra mysql, workload e bcc
-├── Makefile                # atalhos de uso
+├── docker-compose.yml          # orquestra mysql, workload e bcc
+├── Makefile                    # atalhos de uso
+├── README.md                   # este arquivo
 ├── bcc/
-│   ├── Dockerfile          # Ubuntu 22.04 + bpfcc-tools
+│   ├── Dockerfile              # Ubuntu 24.04 + bpfcc-tools
 │   └── scripts/
+│       ├── mysqld_query_fixed.py    # versão corrigida do mysqld_qslower
+│       ├── dbslower_fixed.py        # versão corrigida do dbslower
+│       ├── dbstat_fixed.py          # versão corrigida do dbstat
 │       ├── run_mysqld_query.sh
 │       ├── run_dbslower.sh
 │       └── run_dbstat.sh
 ├── mysql/
-│   └── init.sql            # cria banco `lab`, tabelas e 200 produtos
-└── workload/
-    ├── Dockerfile
-    └── workload.py         # gerador de carga: queries rápidas, lentas e escritas
+│   └── init.sql                # cria banco `lab`, tabelas e 200 produtos
+├── workload/
+│   ├── Dockerfile
+│   └── workload.py             # gerador de carga: queries rápidas, lentas e escritas
+└── docs/                       # documentação técnica
+    ├── README.md
+    ├── comparacao-dbslower.md
+    ├── comparacao-dbstat.md
+    ├── comparacao-mysqld-qslower.md
+    └── resumo-bcc-mysql-troubleshooting.md
 ```
+
+---
 
 ## Início rápido
 
@@ -56,9 +92,17 @@ make trace-query
 # 3. Rastreia queries lentas > 1ms
 make trace-slow
 
-# 4. Histograma de latências (atualiza a cada 5s)
+# 4. Rastreia queries lentas > 10ms
+make trace-slow-10ms
+
+# 5. Histograma de latências (atualiza a cada 5s)
 make trace-stat
+
+# 6. Histograma de latências (atualiza a cada 10s)
+make trace-stat-10s
 ```
+
+---
 
 ## Comandos disponíveis
 
@@ -67,11 +111,11 @@ make up               Sobe todos os containers com build
 make down             Derruba e remove volumes
 make restart          Reinicia o ambiente
 
-make trace-query      mysqld_query — todas as queries
-make trace-slow       dbslower — queries > 1ms
-make trace-slow-10ms  dbslower — queries > 10ms
-make trace-stat       dbstat — histograma (5s)
-make trace-stat-10s   dbstat — histograma (10s)
+make trace-query      mysqld_query_fixed — todas as queries
+make trace-slow       dbslower_fixed — queries > 1ms
+make trace-slow-10ms  dbslower_fixed — queries > 10ms
+make trace-stat       dbstat_fixed — histograma (5s)
+make trace-stat-10s   dbstat_fixed — histograma (10s)
 
 make shell-bcc        Shell interativo no container BCC
 make mysql-cli        Cliente MySQL interativo
@@ -80,6 +124,8 @@ make logs-workload    Logs do gerador de carga
 make logs-mysql       Logs do MySQL
 make ps               Status dos containers
 ```
+
+---
 
 ## Como funciona o rastreamento
 
@@ -94,15 +140,28 @@ Container BCC (privileged)
 ```
 
 O container `bcc` compartilha o namespace PID do `mysql`, o que permite
-que as ferramentas BPF vejam o processo `mysqld` e anexem probes USDT/uprobes
+que as ferramentas BPF vejam o processo `mysqld` e anexem probes USDT
 diretamente ao binário, mesmo estando em containers separados.
+
+### Por que as ferramentas originais não funcionam?
+
+As ferramentas BCC oficiais esperam os probes `query__start`/`query__done`,
+que na imagem `mysql:5.7` Docker possuem formato de argumentos incompatível
+com o BCC (compilado sem `systemtap-sdt-dev`).
+
+Nossas ferramentas corrigidas usam `query__exec__start`/`query__exec__done`,
+que funcionam corretamente.
+
+Para mais detalhes, consulte: [docs/resumo-bcc-mysql-troubleshooting.md](docs/resumo-bcc-mysql-troubleshooting.md)
+
+---
 
 ## Gerador de carga
 
 O `workload.py` gera tráfego contínuo com três padrões:
 
 - **Queries rápidas** (10/ciclo): SELECTs por índice, JOINs simples — tipicamente < 1ms
-- **Queries lentas** (1/ciclo): SELECTs com `SLEEP(0.15–0.5s)` — visíveis no `dbslower`
+- **Queries lentas** (1/ciclo): SELECTs com `SLEEP(0.15–0.5s)` — visíveis no `dbslower_fixed`
 - **Escritas** (1/ciclo): INSERTs e UPDATEs nas tabelas `pedidos` e `eventos_trace`
 
 Acompanhe o tráfego:
@@ -110,34 +169,66 @@ Acompanhe o tráfego:
 make logs-workload
 ```
 
+---
+
 ## Exemplos de saída esperada
 
 ### `make trace-query`
 ```
-TIME(s)     PID    QUERY
-0.000       1234   SELECT * FROM produtos WHERE id = 42
-0.001       1234   SELECT categoria, COUNT(*) FROM produtos GROUP BY categoria
-0.153       1234   SELECT SLEEP(0.15), nome FROM produtos WHERE id = 7
+==> mysqld PID: 1
+==> Rastreando queries MySQL com mysqld_query_fixed.py...
+    (Ctrl+C para encerrar)
+
+Tracing MySQL queries slower than 0 ms...
+TIME(s)        PID          MS QUERY
+6916.068146    40757     0.107 SELECT preco FROM produtos WHERE id = 183
+6916.068588    40757     0.140 INSERT INTO pedidos (produto_id, quantidade, valor_total, status) VALUES (183, 5, 2900.15, 'pendente')
+6916.068868    40757     5.928 commit
+6916.275621    40757     0.243 SELECT COUNT(*) FROM pedidos WHERE status = 'concluido'
 ```
 
 ### `make trace-slow`
 ```
-TIME(s)     PID    MS        QUERY
-0.153       1234   153.41    SELECT SLEEP(0.15), nome FROM produtos WHERE id = 7
-0.312       1234   301.88    SELECT SLEEP(0.3), COUNT(*) FROM pedidos
+==> mysqld PID: 1
+==> Rastreando queries mais lentas que 1ms...
+    (Ctrl+C para encerrar)
+
+Tracing MySQL queries slower than 1.0 ms...
+TIME(s)        PID          MS QUERY
+6916.499541    40757   150.326 SELECT SLEEP(0.15), nome FROM produtos WHERE id = 87
+6917.082631    40757     6.098 commit
 ```
 
 ### `make trace-stat`
 ```
-     usecs               : count     distribution
+==> mysqld PID: 1
+==> Coletando histograma de latências (intervalo: 5s)...
+    (Ctrl+C para encerrar)
+
+Tracing MySQL query latencies... Hit Ctrl-C to end.
+Waiting 5 seconds for first report...
+
+Query latency distribution (microseconds):
+     [b'1us', b'2us', b'4us', b'8us', b'16us', b'32us', b'64us', b'128us', b'256us', b'512us', b'1ms', b'2ms', b'4ms', b'8ms', b'16ms', b'32ms', b'64ms', b'128ms', b'256ms', b'512ms+'] : count     distribution
          0 -> 1          : 0        |                                        |
-         2 -> 3          : 12       |***                                     |
-         4 -> 7          : 47       |**************                          |
-         8 -> 15         : 89       |**************************              |
-        16 -> 31         : 134      |****************************************|
-       ...
-   131072 -> 262143      : 3        |                                        |
+         2 -> 3          : 0        |                                        |
+         4 -> 7          : 0        |                                        |
+         8 -> 15         : 0        |                                        |
+        16 -> 31         : 0        |                                        |
+        32 -> 63         : 4        |**********                              |
+        64 -> 127        : 9        |**********************                  |
+       128 -> 255        : 16       |****************************************|
+       256 -> 511        : 2        |*****                                   |
+       512 -> 1023       : 2        |*****                                   |
+      1024 -> 2047       : 0        |                                        |
+      2048 -> 4095       : 0        |                                        |
+      4096 -> 8191       : 3        |*******                                 |
+     81920 -> 16383      : 0        |                                        |
+    131072 -> 262143     : 1        |**                                      |
+    262144 -> 524287     : 1        |**                                      |
 ```
+
+---
 
 ## Exploração avançada
 
@@ -158,6 +249,8 @@ syscount-bpfcc
 ls /usr/sbin/*-bpfcc
 ```
 
+---
+
 ## Troubleshooting
 
 **"mysqld não encontrado"**
@@ -173,6 +266,19 @@ sudo mount -t debugfs debugfs /sys/kernel/debug
 Confirme que o container `bcc` está rodando com `privileged: true`.
 Verifique: `docker inspect bcc-tools | grep Privileged`
 
-**MySQL 8.0 / probes não encontradas**
-As ferramentas USDT requerem MySQL 5.7. Se você precisar usar MySQL 8+,
-consulte o modo uprobe de `dbslower` (opção `-m uprobe`).
+**Ferramentas BCC originais não funcionam**
+Este é um problema conhecido. As ferramentas oficiais (`mysqld_qslower-bpfcc`,
+`dbslower-bpfcc`, `dbstat-bpfcc`) não funcionam com a imagem `mysql:5.7` Docker.
+Use nossas versões corrigidas via `make trace-*`.
+
+Consulte [docs/resumo-bcc-mysql-troubleshooting.md](docs/resumo-bcc-mysql-troubleshooting.md) para detalhes completos.
+
+---
+
+## Referências
+
+- [Documentação comparativa das ferramentas](docs/README.md)
+- [BCC - BPF Compiler Collection](https://github.com/iovisor/bcc)
+- [Brendan Gregg - Linux MySQL Slow Query Tracing](http://www.brendangregg.com/blog/2016-10-04/linux-bcc-mysqld-qslower.html)
+- [MySQL 5.7 DTrace Documentation](https://dev.mysql.com/doc/refman/5.7/en/dba-dtrace-server.html)
+- [BCC Issue #4761 - mysqld_qslower não funciona](https://github.com/iovisor/bcc/issues/4761)
