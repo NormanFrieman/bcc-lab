@@ -19,8 +19,10 @@ if [[ -z "$MYSQLD_PID" ]]; then
 fi
 
 echo "==> mysqld PID: $MYSQLD_PID"
-echo "==> Rastreando queries mais lentas que ${THRESHOLD}ms com dbslower..."
+echo "==> Rastreando queries mais lentas que ${THRESHOLD}ms..."
 echo "    (Ctrl+C para encerrar)"
 echo ""
 
-exec /usr/sbin/dbslower-bpfcc mysql -p "$MYSQLD_PID" -d "$THRESHOLD"
+# Usa o script Python corrigido com probe names corretos para MySQL 5.7
+# Nota: A ferramenta dbslower-bpfcc tem um bug - usa nomes de probe incorretos
+exec python3 /scripts/dbslower_fixed.py "$MYSQLD_PID" "$THRESHOLD"

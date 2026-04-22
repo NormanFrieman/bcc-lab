@@ -12,8 +12,10 @@ if [[ -z "$MYSQLD_PID" ]]; then
 fi
 
 echo "==> mysqld PID: $MYSQLD_PID"
-echo "==> Rastreando queries MySQL com mysqld_query.py..."
+echo "==> Rastreando queries MySQL com mysqld_query_fixed.py..."
 echo "    (Ctrl+C para encerrar)"
 echo ""
 
-exec /usr/sbin/mysqld_query-bpfcc -p "$MYSQLD_PID"
+# Usa o script Python corrigido com threshold de 0ms para capturar todas as queries
+# Nota: A ferramenta mysqld_qslower-bpfcc tem um bug - usa nomes de probe incorretos
+exec python3 /scripts/mysqld_query_fixed.py "$MYSQLD_PID" 0

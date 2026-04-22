@@ -18,8 +18,10 @@ if [[ -z "$MYSQLD_PID" ]]; then
 fi
 
 echo "==> mysqld PID: $MYSQLD_PID"
-echo "==> Coletando histograma de latências com dbstat (intervalo: ${INTERVAL}s)..."
+echo "==> Coletando histograma de latências (intervalo: ${INTERVAL}s)..."
 echo "    (Ctrl+C para encerrar)"
 echo ""
 
-exec /usr/sbin/dbstat-bpfcc mysql -p "$MYSQLD_PID" "$INTERVAL"
+# Usa o script Python corrigido com probe names corretos para MySQL 5.7
+# Nota: A ferramenta dbstat-bpfcc tem um bug - usa nomes de probe incorretos
+exec python3 /scripts/dbstat_fixed.py "$MYSQLD_PID" "$INTERVAL"
