@@ -26,9 +26,9 @@ Laboratório Docker para explorar ferramentas BPF (Berkeley Packet Filter) volta
 
 | Ferramenta | O que faz | Base |
 |------------|-----------|------|
-| `mysqld_query_fixed` | Rastreia **todas** as queries MySQL em tempo real | Original: `mysqld_qslower` (Brendan Gregg/Netflix, 2016) |
-| `dbslower_fixed` | Filtra queries acima de um **limiar de latência** | Original: `dbslower` (Sasha Goldshtein, 2017) |
-| `dbstat_fixed` | Exibe **histograma** de distribuição de latências | Original: `dbstat` (Sasha Goldshtein, 2017) |
+| `mysqld_query_fixed` | Rastreia **todas** as queries MySQL em tempo real | Original: `mysqld_qslower` (2016) |
+| `dbslower_fixed` | Filtra queries acima de um **limiar de latência** | Original: `dbslower` (2017) |
+| `dbstat_fixed` | Exibe **histograma** de distribuição de latências | Original: `dbstat` (2017) |
 
 As ferramentas utilizam probes USDT (`query__exec__start` / `query__exec__done`) que funcionam corretamente com o MySQL 5.7 da imagem Docker oficial.
 
@@ -71,7 +71,6 @@ bcc-lab/
 │   ├── Dockerfile
 │   └── workload.py             # gerador de carga: queries rápidas, lentas e escritas
 └── docs/                       # documentação técnica
-    ├── README.md
     ├── comparacao-dbslower.md
     ├── comparacao-dbstat.md
     ├── comparacao-mysqld-qslower.md
@@ -275,10 +274,42 @@ Consulte [docs/resumo-bcc-mysql-troubleshooting.md](docs/resumo-bcc-mysql-troubl
 
 ---
 
+## Documentação Técnica
+
+A pasta `docs/` contém documentação detalhada comparando as ferramentas BCC originais com nossas versões corrigidas:
+
+| Documento | Ferramenta | Original | Corrigido | Descrição |
+|-----------|------------|----------|-----------| -----------|
+| [comparacao-mysqld-qslower.md](docs/comparacao-mysqld-qslower.md) | `mysqld_qslower` | Original (2016) | `mysqld_query_fixed.py` | Comparação detalhada do rastreador de queries |
+| [comparacao-dbslower.md](docs/comparacao-dbslower.md) | `dbslower` | Original (2017) | `dbslower_fixed.py` | Comparação do filtro de queries lentas |
+| [comparacao-dbstat.md](docs/comparacao-dbstat.md) | `dbstat` | Original (2017) | `dbstat_fixed.py` | Comparação do histograma de latências |
+| [resumo-bcc-mysql-troubleshooting.md](docs/resumo-bcc-mysql-troubleshooting.md) | - | - | - | Resumo completo do troubleshooting realizado |
+| [ebpf-database-tracing.md](docs/ebpf-database-tracing.md) | - | - | - | Conceitos de eBPF para tracing de banco de dados |
+| [usdt-probes-e-ferramentas-bcc.md](docs/usdt-probes-e-ferramentas-bcc.md) | - | - | - | USDT probes e ferramentas BCC |
+| [implementando-ferramentas-usdt-customizadas.md](docs/implementando-ferramentas-usdt-customizadas.md) | - | - | - | Guia de implementação de ferramentas customizadas |
+
+## Histórico de Correções
+
+**Commit com as correções:** `d6d6d66` — `fix: Corrige ferramentas BPF de rastreamento MySQL para usar probes USDT corretos`
+
+### Resumo do Problema Resolvido
+
+**Erro Original:**
+```
+/scripts/run_mysqld_query.sh: line 19: /usr/sbin/mysqld_query-bpfcc: No such file or directory
+```
+
+As ferramentas BCC oficiais (`mysqld_qslower-bpfcc`, `dbslower-bpfcc`, `dbstat-bpfcc`) falhavam silenciosamente com a imagem `mysql:5.7` Docker.
+
+**Causa Raiz:**
+As ferramentas BCC originais usam os probes `query__start`/`query__done`, que **não funcionam** com a imagem `mysql:5.7` (Oracle Linux) devido a diferenças no formato de compilação dos probes USDT.
+
+**Solução:**
+Scripts Python personalizados usando os probes `query__exec__start`/`query__exec__done`, que funcionam corretamente.
+
 ## Referências
 
-- [Documentação comparativa das ferramentas](docs/README.md)
 - [BCC - BPF Compiler Collection](https://github.com/iovisor/bcc)
-- [Brendan Gregg - Linux MySQL Slow Query Tracing](http://www.brendangregg.com/blog/2016-10-04/linux-bcc-mysqld-qslower.html)
+- [Linux MySQL Slow Query Tracing with BCC](http://www.brendangregg.com/blog/2016-10-04/linux-bcc-mysqld-qslower.html)
 - [MySQL 5.7 DTrace Documentation](https://dev.mysql.com/doc/refman/5.7/en/dba-dtrace-server.html)
 - [BCC Issue #4761 - mysqld_qslower não funciona](https://github.com/iovisor/bcc/issues/4761)
