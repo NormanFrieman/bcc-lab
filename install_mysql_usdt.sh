@@ -12,7 +12,7 @@ sudo apt install -y cmake gcc g++ libncurses5-dev libssl-dev systemtap-sdt-dev s
 echo "2. Baixando Código-Fonte do MySQL 5.7.44 e Boost 1.59.0..."
 cd ~
 # Download do MySQL Source (não o binário genérico)
-wget -c https://mysql.com
+wget -c https://downloads.mysql.com/archives/get/p/23/file/mysql-5.7.44.tar.gz
 # Download do Boost (evita timeout no CMake)
 wget -c https://sourceforge.net
 
